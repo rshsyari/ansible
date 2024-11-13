@@ -1,0 +1,77 @@
+- name: Web Server Setup
+  hosts: vps
+  gather_facts: false
+  become: true
+
+    #  vars_files:
+    #- vars/main.yml
+
+  vars_prompt:
+    - name: domain_name
+      prompt: "\nEnter the domain name"
+      private: no
+
+    - name: mysql_password
+      prompt: "\nEnter your MySQL password"
+      private: yes
+
+    - name: stack_options
+      prompt: "\nChoose stack (LEMP/LAMP)"
+      private: no
+      default: "LEMP"
+
+    - name: php_version
+      prompt: "\nEnter the PHP version (e.g., 7.4, 8.0, 8.1)"
+      # validate: '^7\.(4)$|^8\.(0|1|2|3)$'
+      private: no
+
+    - name: use_redis
+      prompt: "\nDo you want to use Redis? (yes/no)"
+      private: no
+      default: no
+
+    - name: use_octane
+      prompt: "\nDo you want to use Octane? (yes/no)"
+      private: no
+      default: no
+
+  tasks:
+    - name: Laravel Octane Server options
+      pause:
+        prompt: "\nWhich Octane server do you want to use? (Swoole/RoadRunner/FrankenPHP)"
+      when: use_octane == "yes"
+      register: octane_server_input
+
+    #- name: Clean the Octane server input
+    #  set_fact:
+    #    octane_input: "{{ octane_server_input | replace('\r', '') | trim }}"
+
+    - name: Validate Stack Options
+      assert:
+        that:
+          - stack_options is match('^(?i)L(A|E|)MP$')
+        fail_msg: "Invalid Stack Option. The options are (LEMP/LAMP)"
+
+    - name: Validate PHP version
+      assert:
+        that:
+          - php_version is match('^7\.(4)$|^8\.(0|1|2|3)$')
+        fail_msg: "Invalid PHP version. Enter a version like 7.4, 8.0, 8.1, 8.2, or 8.3"
+
+    - name: Validate Octane Server
+      assert:
+        that:
+          - octane_server_input.user_input is match('^\s*(?i)(Swoole|RoadRunner|FrankenPHP)\s*$')
+        fail_msg: "Invalid Octane Server. Choose from (Swoole/RoadRunner/FrankenPHP)"
+
+    - name: Show gathered variables
+      debug:
+        msg: "Domain: {{ domain_name }}, PHP Version: {{ php_version }}, Stack: {{ stack_options }}, Use Redis: {{ use_redis }}, Use Octane: {{ use_octane }}"
+
+  roles:
+    - { role: nginx, when: stack_options == "LEMP" }
+    - { role: apache, when: stack_options == "LAMP" }
+    - role: php
+    - role: mysql
+    - { role: if_redis, when: use_redis == "yes" }
+    - { role: if_octane, when: use_octane == "yes" }
